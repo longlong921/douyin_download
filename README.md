@@ -1,74 +1,63 @@
-# 拾影 · 抖音视频解析下载
+# 拾影 · Haskell 全栈抖音下载
 
-React + TypeScript + Vite 手机 Web/PWA，FastAPI 后端。支持分享文案、短链接和标准视频地址。后端独立解析分享页 `_ROUTER_DATA`，只使用平台返回的媒体地址，浏览器通过同源流式接口预览、下载。
+Haskell / Warp / WAI 后端，Lucid 类型化 HTML 前端。页面、表单、校验、解析、令牌和下载均在 Haskell 中实现，没有 React、Node.js 或 Python 运行时。浏览器原生播放器和下载器处理媒体；少量渐进增强 JavaScript 只负责剪贴板、加载提示和 Service Worker。关闭 JavaScript 仍可解析、预览、下载。
 
-**真实下载已通过：给定短链接对应视频已下载 12,650,373 字节，720×1280 H.264 + AAC，并通过 FFmpeg 完整解码。** 详细证据及复现见 [docs/verification.md](docs/verification.md)。
+真实样本：`https://v.douyin.com/1znUsjZNolc/`。Haskell 版本已经下载 12,650,373 字节、720×1280 H.264 + AAC 视频并通过 FFmpeg 完整解码；SHA256 与迁移前相同。验收见 [docs/verification.md](docs/verification.md)。
 
-## 启动
+## 本地构建
 
-需要 Docker Engine 和 Docker Compose v2：
+Ubuntu 24.04 / GHC 9.4.7 已验证（使用系统包，避免依赖 Hackage 在线索引）：
+
+```sh
+sudo apt-get update
+sudo apt-get install ghc libghc-warp-dev libghc-wai-dev \
+  libghc-http-client-tls-dev libghc-aeson-dev libghc-lucid-dev \
+  libghc-network-uri-dev libghc-cryptonite-dev ca-certificates
+./scripts/build-haskell.sh
+./build/douyin-download
+# http://127.0.0.1:8187
+```
+
+Cabal 项目定义位于 `haskell/douyin-download.cabal`，可在能正常访问 Hackage 的环境运行 `cabal build all`；本次环境的 Hackage 安全索引签名验证失败，实际构建和测试采用上述 GHC + 系统依赖方式。
+
+环境变量：`BIND_ADDRESS`（默认 127.0.0.1）、`PORT`（默认 8187）、`BASE_PATH`（默认空）、`STATIC_DIR`（默认 static）。反向代理挂 `/douyin/` 时设置 `BASE_PATH=/douyin`，代理转发应剥离该前缀。默认限制固定在源码中：512 MiB/视频、8 MiB/封面、4 并发解析、4 并发媒体流、500 个结果、令牌 30 分钟、解析 60 秒、媒体总时限 300 秒、上游单次响应空闲超时 30 秒。
+
+## Docker Compose
 
 ```sh
 cp .env.example .env
 docker compose up --build -d
-# 打开 http://localhost:8000
-docker compose logs -f app
+# http://localhost:8187
 ```
 
-开发（Python 3.12、Node.js 22）：
+多阶段镜像在构建阶段运行 Haskell 测试，运行镜像仅含二进制、系统动态库、CA 证书和静态资源。服务器部署使用原生 systemd 服务，不需要 Docker，也不会修改服务器容器环境。Docker Compose 配置验证通过；本环境 Docker Hub 网络限制仍影响镜像拉取，镜像构建未作为本次生产部署路径。
+
+## HTTPS、PWA 和部署
+
+当前发布目标为 `https://typed.cn/douyin/`。部署细节与回滚见 [deploy/README.md](deploy/README.md)。Android Chrome 菜单可添加到主屏幕。PWA、剪贴板和 Service Worker 需要 HTTPS（localhost 除外）；离线仅能打开首页，解析与下载必须联网。下载进度交给浏览器管理。
+
+`deploy/douyin-haskell.service` 使用动态低权限用户、256 MiB 内存限制、50% CPU 配额、只读系统和独立私有临时目录。监听 127.0.0.1:8187，不暴露后台端口；`deploy/nginx-location.conf` 仅增加 `/douyin/` 的反向代理，不替换已有首页或 API。
+
+## 解析和安全
+
+- `Parser.hs`：从文案提取允许的抖音链接，处理短链和标准视频链接，解析 `_ROUTER_DATA`，核对作品 ID；缺失作者/封面/时长正常降级。首次框架响应只允许一次同会话补请求，保留平台匿名 Cookie，不绕过验证码。
+- `Network.hs`：每一跳验证协议、端口、凭据、域名边界。DNS 只解析 IPv4，拒绝内网、回环、链路本地、保留地址，随后将解析结果固定到实际 TCP/TLS 连接，防止二次 DNS 解析带来的重绑定。IPv6 上游目前不支持。忽略环境代理，不接收用户指定代理或任意下载 URL。
+- `App.hs`：媒体接口只接受 256 位随机令牌。限制并发、缓存容量、读取体积和时限；流式读取，不整段缓存视频。支持单段 Range、Content-Type 和中文 Content-Disposition。媒体过期重新解析，超过 4 分钟主动刷新；失败返回中文错误码。
+- `View.hs`：Lucid 自动转义用户输入和上游文本。PWA 只缓存自身静态首页和资源，既不缓存结果/媒体，也不删除其他应用的缓存。
+
+视频保持平台原样，可能含水印和片尾。当前样本页面时长 48.734 秒，文件时长 51.733 秒。上游仍可能限流、要求验证或中断传输；流开始后发生错误只能中止下载，浏览器提示失败后可重新解析。结果在进程内存中，重启需要重新解析，多实例部署需要另行增加共享令牌存储与全局限额。
+
+## 验收
 
 ```sh
+./scripts/build-haskell.sh
+# 已启动服务，且安装 ffmpeg 后：
+python3 scripts/verify_live.py --base http://127.0.0.1:8187
+# 可选浏览器测试工具（非生产依赖）：
 python3 -m venv .venv
-.venv/bin/pip install -r backend/requirements.txt
-cd frontend
-npm ci
-npm run build
-cd ..
-.venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+.venv/bin/pip install playwright
+.venv/bin/python -m playwright install --with-deps chromium
+.venv/bin/python scripts/browser_check.py --base http://127.0.0.1:8187
 ```
 
-前端热更新：另开终端 `cd frontend && npm run dev`，访问 5173 端口，Vite 将 `/api` 代理到后端。构建后后端直接提供前端静态文件。
-
-## 手机与 HTTPS 部署
-
-局域网临时测试可设 `BIND_ADDRESS=0.0.0.0`，手机连接同一 Wi-Fi，访问电脑局域网 IP 的 8000 端口。HTTP 局域网地址可进行解析/下载，但剪贴板 API、Service Worker 和 PWA 安装需要 **HTTPS**（localhost 开发例外）。剪贴板不可用时长按输入框粘贴。
-
-生产用 Caddy/Nginx 提供证书并同源代理到 `127.0.0.1:8000`，例如 Caddyfile：
-
-```caddyfile
-video.example.com {
-    reverse_proxy 127.0.0.1:8000 {
-        flush_interval -1
-    }
-}
-```
-
-域名解析到服务器，开放 80/443，Caddy 自动申请证书。Nginx 应关闭 `proxy_buffering`，将 `proxy_read_timeout` 设置为 310 秒。不要缓存 `/api/*`。安卓 Chrome 菜单选择“安装应用”或“添加到主屏幕”。PWA 只缓存应用外壳，解析与下载必须联网；不缓存媒体或 API 数据。已验证 Chromium 中离线打开应用外壳；真机安装需在自己的 HTTPS 部署中确认。
-
-下载由浏览器管理，可在下载列表查看；应用不虚构进度。浏览器直接导航下载接口时若失败，会显示含错误码和中文说明的 JSON；返回应用点击重新解析可恢复。流已经开始后若网络中断，HTTP 状态不能再修改，浏览器会报告失败，应重新解析并下载。
-
-## 配置与限制
-
-见 `.env.example`：默认 512 MiB/视频、4 个并发媒体流、4 个并发解析、令牌 30 分钟、最多 500 个结果。封面上限 8 MiB。连接超时 10 秒，空闲读取 30 秒，单次媒体请求总时限 300 秒，解析总时限 60 秒。支持单段 Range 请求。
-
-`DOUYIN_COOKIE` 可由部署者填写自己合法取得的有效 Cookie；它不是保证成功的开关，不会自动绕过验证码。不要把 Cookie 放进前端或提交仓库。后端直连网络，刻意不读取 HTTP_PROXY/HTTPS_PROXY，确保公网 DNS 检查控制实际连接。
-
-资源令牌存在单进程内存中，重启后需要重新解析。**保持一个 uvicorn worker**；多副本需增加共享存储和分布式限额。生产如对公网开放，建议在反向代理加身份验证及每 IP 请求速率限制；当前并发限制是每实例全局限制。
-
-下载接口只接受不可猜测令牌，不接受 URL。媒体来自已解析且 ID 匹配的作品。所有请求及重定向都校验协议、端口、凭据、域名边界；连接时校验全部 DNS 结果，只允许公网地址，防止 DNS 重绑定。流以 64 KiB 分块传输，检查 Content-Length/Content-Range，未知长度也累计限额；媒体地址过期后重新解析一次，4 分钟以上的地址主动刷新。
-
-正常字段缺失显示降级文案。错误码包括 `invalid_input`、`unavailable`、`verification_required`、`timeout`、`rate_limited`、`parser_changed`、`data_missing`、`upstream_error`、`expired`、`unsafe_url`、`too_large`。`data_missing` 表示上游没有数据，不能据此断言作品已删除或确定需要登录。
-
-## 验证与维护
-
-```sh
-.venv/bin/pip install pytest httpx
-.venv/bin/python -m pytest backend/tests -q
-cd frontend && npm ci && npm run build
-# 另装 ffmpeg（含 ffprobe），启动应用后运行真实验收
-python3 scripts/verify_live.py
-```
-
-真实验收脚本保存文件、计算 SHA256、用 ffprobe 检查轨道，再由 ffmpeg 完整解码；无法解析时返回非零退出码，不使用模拟视频替代。平台变化优先修改 `backend/app/parser.py`，网络和下载安全逻辑位于 `network.py` / `main.py`。
-
-本项目独立实现，调研参考 [aiaoxd/douyinDownloader](https://github.com/aiaoxd/douyinDownloader) 的分享页思路及 [yt-dlp 抖音问题 #17464](https://github.com/yt-dlp/yt-dlp/issues/17464)。未引入第三方解析服务，实际文件可能带平台水印和片尾，不承诺特定画质或所有作品均可用。
+实测会下载、计算 SHA256 并完整解码；没有用测试素材替代真实视频。测试脚本使用 Python 仅作开发验收工具。历史 React/FastAPI 实现在 Git 历史中，旧验收记录保留于 `docs/verification-v1.md`。

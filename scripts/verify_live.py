@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import urllib.request
+from urllib.parse import urljoin
 
 urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
 p=argparse.ArgumentParser()
@@ -19,7 +20,7 @@ except urllib.error.HTTPError as e:
     print(e.read().decode());raise SystemExit(1)
 print(json.dumps({k:v for k,v in info.items() if not k.endswith('_url')},ensure_ascii=False,indent=2))
 h=hashlib.sha256();size=0
-with urllib.request.urlopen(a.base+info['download_url'],timeout=60) as response,open(a.output,'wb') as out:
+with urllib.request.urlopen(urljoin(a.base, info['download_url']),timeout=60) as response,open(a.output,'wb') as out:
     print('content-type:',response.headers.get('Content-Type'))
     while chunk:=response.read(65536):
         out.write(chunk);h.update(chunk);size+=len(chunk)

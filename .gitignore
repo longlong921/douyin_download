@@ -8,3 +8,9 @@ dist/
 *.webm
 *.log
 test-results/
+build/
+dist-newstyle/
+*.hi
+*.o
+
+cabal.project.local
