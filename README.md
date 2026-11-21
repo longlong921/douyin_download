@@ -1,6 +1,6 @@
-# 拾影 · Haskell 全栈抖音下载
+# 拾影 · 抖音视频下载
 
-Haskell / Warp / WAI 后端，Lucid 类型化 HTML 前端。页面、表单、校验、解析、令牌和下载均在 Haskell 中实现，没有 React、Node.js 或 Python 运行时。浏览器原生播放器和下载器处理媒体；少量渐进增强 JavaScript 只负责剪贴板、加载提示和 Service Worker。关闭 JavaScript 仍可解析、预览、下载。
+后端使用 Haskell、Warp 和 WAI，前端由 Lucid 渲染。点击「下载到本地」后，按钮立即显示「已请求下载」。在浏览器的下载列表中可以查看进度，短暂防连点后可再次下载。关闭 JavaScript 仍可解析、预览和下载。
 
 真实样本：`https://v.douyin.com/1znUsjZNolc/`。Haskell 版本已经下载 12,650,373 字节、720×1280 H.264 + AAC 视频并通过 FFmpeg 完整解码；SHA256 与迁移前相同。验收见 [docs/verification.md](docs/verification.md)。
 

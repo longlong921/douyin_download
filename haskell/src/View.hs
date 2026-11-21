@@ -8,13 +8,16 @@ import qualified Data.Text as T
 import Data.Maybe
 import Text.Printf
 
+appTitle :: Text
+appTitle = "拾影 · 抖音视频下载"
+
 home :: Text -> Text -> Maybe AppError -> Maybe (Text,Video) -> Html ()
 home base input failure result = doctypehtml_ $ do
  head_ $ do
   meta_ [charset_ "utf-8"]
   meta_ [name_ "viewport",content_ "width=device-width, initial-scale=1, viewport-fit=cover"]
   meta_ [name_ "theme-color",content_ "#101618"]
-  title_ "拾影 · Haskell 视频下载"
+  title_ (toHtml appTitle)
   link_ [rel_ "stylesheet",href_ (base<>"/style.css")]
   link_ [rel_ "manifest",href_ (base<>"/manifest.webmanifest")]
   link_ [rel_ "icon",href_ (base<>"/icon.svg")]
@@ -23,7 +26,6 @@ home base input failure result = doctypehtml_ $ do
   header_ $ do
    a_ [class_ "brand",href_ (base<>"/")] $ do
     span_ [class_ "logo"] "↓"; toHtml ("拾影"::Text); span_ [class_ "brand-small"] "视频下载"
-   span_ [class_ "badge"] "Haskell 全栈"
   section_ [class_ "intro"] $ do
    p_ [class_ "eyebrow"] "KEEP THE MOMENT"
    h1_ $ do "喜欢的视频，"; br_ []; span_ "留在手机里。"
@@ -53,7 +55,9 @@ home base input failure result = doctypehtml_ $ do
       video_ ([controls_ "",makeAttribute "playsinline" "",preload_ "metadata",src_ u] ++ [poster_ (u<>"?kind=cover") | isJust (cover v)]) (pure () :: Html ())
       h3_ (toHtml $ title v)
       p_ [class_ "video-meta"] $ toHtml $ fromMaybe "作者信息未提供" (author v) <> " · " <> maybe "时长未提供" (T.pack . printf "%.1f 秒") (duration v)
-      a_ [class_ "primary download",href_ (u<>"?download=1"),download_ ""] "↓ 下载到本地"
+      a_ [id_ "download-link",class_ "primary download",href_ (u<>"?download=1"),download_ ""] "↓ 下载到本地"
+      p_ [id_ "download-status",class_ "download-status",role_ "status"] (pure () :: Html ())
+      noscript_ $ p_ [class_ "download-status"] "下载进度可在浏览器的下载列表中查看。"
       a_ [class_ "source",href_ ("https://www.douyin.com/video/"<>videoId v),target_ "_blank",rel_ "noreferrer"] "在抖音查看原作品 ↗"
   section_ [class_ "guide"] $ mapM_ (\(n,t,d)->div_ $ do b_ (toHtml (n::Text));p_ $ do toHtml (t::Text);small_ (toHtml (d::Text))) [("1","复制分享链接","抖音 → 分享 → 复制链接"),("2","粘贴并解析","整段分享文案也可以"),("3","下载到手机","在浏览器下载列表中查看")]
   footer_ $ do p_ "只保存你拥有或获准下载的作品，尊重创作者。";p_ "添加到主屏幕，即可像 App 一样使用 · 在线解析需要网络"
