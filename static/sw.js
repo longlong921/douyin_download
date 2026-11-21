@@ -1,4 +1,4 @@
-const CACHE='shiying-haskell-v2';
+const CACHE='shiying-haskell-v3';
 const root=new URL('./',self.location.href);
 const shell=['','style.css','enhance.js','manifest.webmanifest','icon-192.png','icon-512.png'].map(x=>new URL(x,root).href);
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(shell)));self.skipWaiting();});

@@ -25,4 +25,4 @@ curl https://typed.cn/douyin/api/health
 
 服务器 SSH 密码不写入源码、部署文件或文档。现有 Nginx 配置备份保存在服务器 `/opt/douyin-haskell/backups/`；最终检查结果见 `docs/verification.md`。
 
-当前发布：`20261114-haskell-v2.2`（显式 HTTP/TLS 固定公网 IP 连接器）。初始 v2 发布包保留在 releases 中供审计；不要回退到缺少该 TLS 修复的版本。
+运行 `readlink -f /opt/douyin-haskell/current` 可查看线上发布目录。回滚时请选择带有 HTTP/TLS 公网 IP 校验修复的版本。
